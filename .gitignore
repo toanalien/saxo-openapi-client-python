@@ -1,0 +1,28 @@
+# virtual environments
+venv/
+
+# VS Code
+.vscode/
+
+# cache folders
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# scripts
+script*.py
+
+# coverage
+.coverage
+
+# Mac stuff
+*.DS_store
+
+# builds
+/dist
+
+# app config
+app_config.json

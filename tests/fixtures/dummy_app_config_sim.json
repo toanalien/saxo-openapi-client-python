@@ -1,0 +1,14 @@
+{
+    "AppName": "Fake App Config",
+    "AppKey": "12345678123456781234567812345678",
+    "AuthorizationEndpoint": "https://sim.logonvalidation.net/authorize",
+    "TokenEndpoint": "https://sim.logonvalidation.net/token",
+    "GrantType": "Code",
+    "OpenApiBaseUrl": "https://gateway.saxobank.com/sim/openapi/",
+    "RedirectUrls": [
+        "http://localhost:12321/redirect1",
+        "http://localhost:12322/redirect2",
+        "http://example.net:12321/redirect"
+    ],
+    "AppSecret": "12345678123456781234567812345678"
+}
