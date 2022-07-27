@@ -1,6 +1,6 @@
 # Samples
 
-This folder contains some examples on how to use the OpenAPI Client. The notebooks are all "runable", but do require a json file named `app_config.json` to be available in this directory. Make sure to copy your own app config in here to play around with these notebooks.
+This folder contains some examples on how to use the OpenAPI Client. The notebooks are all "runnable", but do require a json file named `app_config.json` to be available in this directory. Make sure to copy your own app config in here to play around with these notebooks.
 
 Table of Contents:
 

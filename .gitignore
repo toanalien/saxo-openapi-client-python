@@ -26,3 +26,6 @@ script*.py
 
 # app config
 app_config.json
+
+# debugging
+/debugging
