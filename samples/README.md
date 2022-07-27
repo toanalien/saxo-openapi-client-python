@@ -7,3 +7,4 @@ Table of Contents:
 1. [Get Started](./01_get_started.ipynb)
 2. [Advanced Login](./02_advanced_login.ipynb)
 3. [CRUD Example w/ Price Alerts](./03_price_alerts_crud.ipynb)
+4. [Searching Instruments](./04_instrument_search.ipynb)
