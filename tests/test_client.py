@@ -1,4 +1,3 @@
-import re
 import time
 
 from pydantic import ValidationError, parse_obj_as
