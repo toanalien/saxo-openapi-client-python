@@ -5,6 +5,7 @@ from time import sleep, time
 from typing import Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
+from loguru import logger
 from pydantic import AnyHttpUrl, ValidationError, parse_obj_as
 from requests import Response, Session
 
@@ -12,12 +13,10 @@ from .models import (
     APIEnvironment,
     APIRequestError,
     AuthorizationCode,
-    AuthorizationError,
     AuthorizationType,
     HttpsUrl,
     NotLoggedInError,
     OpenAPIAppConfig,
-    StateMismatchError,
     TokenData,
     TokenExpiredError,
 )
@@ -31,6 +30,8 @@ from .utils import (
     validate_redirect_url,
 )
 
+logger.remove()
+
 
 class SaxoOpenAPIClient:
     """Saxo OpenAPI Client.
@@ -40,12 +41,30 @@ class SaxoOpenAPIClient:
     An application config object file is required to initialize this class.
     """
 
-    def __init__(self, app_config: dict):
+    @logger.catch(reraise=True)
+    def __init__(
+        self, app_config: dict, log_sink: str = None, log_level: str = "DEBUG"
+    ):
+        if log_sink:
+            logger.add(
+                log_sink,
+                format=(
+                    "{time:!UTC} {thread:12} {module:15} {line:3} {level:8} {message}"
+                ),
+                level=log_level,
+                enqueue=True,
+            )
+
+        self.client_session_id: str = token_urlsafe(10)
+        logger.debug(f"initializing OpenAPI Client with {self.client_session_id=}")
+
         self._app_config: OpenAPIAppConfig = parse_obj_as(OpenAPIAppConfig, app_config)
         self._http_session: Session = Session()
         self._http_session.headers = make_default_session_headers()
         self._token_data: Union[TokenData, None] = None
+        logger.success("successfully parsed app config and initialized OpenAPI Client")
 
+    @logger.catch(reraise=True)
     def login(
         self,
         redirect_url: Optional[AnyHttpUrl] = None,
@@ -55,12 +74,14 @@ class SaxoOpenAPIClient:
         _redirect_url = validate_redirect_url(self._app_config, redirect_url)
         state = token_urlsafe(20)
         auth_url = construct_auth_url(self._app_config, _redirect_url, state)
+        logger.debug(f"logging in with {str(_redirect_url)=} and {str(auth_url)=}")
 
         if with_server:
-            redirect_server = RedirectServer(_redirect_url)
+            redirect_server = RedirectServer(_redirect_url, state=state)
             redirect_server.start()
 
         if with_browser:
+            logger.debug("launching browser with login page")
             print(
                 "🌐 opening login page in browser - waiting for user to "
                 "authenticate... 🔑"
@@ -69,23 +90,18 @@ class SaxoOpenAPIClient:
         else:
             print(f"🌐 navigate to the following web page to log in: {auth_url}")
 
-        parsed_qs = None
-
         if with_server:
             try:
-                while not redirect_server.callback_url:
+                while not redirect_server.auth_code:
                     sleep(0.1)
                 print("📞 received callback from Saxo SSO")
-                redirect_location = parse_obj_as(
-                    AnyHttpUrl, redirect_server.callback_url
-                )
-                parsed_qs = parse_qs(redirect_location.query)
             except KeyboardInterrupt:
                 print("🛑 operation interrupted by user - shutting down")
                 return
             finally:
                 redirect_server.shutdown()
         else:
+            parsed_qs = None
             while not parsed_qs:
                 try:
                     redirect_location_input = input("📎 paste redirect location (url): ")
@@ -99,23 +115,9 @@ class SaxoOpenAPIClient:
                     print("🛑 operation interrupted by user - shutting down")
                     return
 
-        received_state = parsed_qs.get("state")
-
-        if not received_state or received_state[0] != state:
-            raise StateMismatchError("❌ returned state missing or incorrect")
-
-        received_auth_code = parsed_qs.get("code")
-
-        if not received_auth_code:
-            raise AuthorizationError(
-                f"❌ error occurred after login: {parsed_qs.get('error')}"
-            )
-
-        auth_code = parse_obj_as(AuthorizationCode, received_auth_code[0])
-
         token_data = exercise_authorization(
             app_config=self._app_config,
-            authorization=auth_code,
+            authorization=parse_obj_as(AuthorizationCode, redirect_server.auth_code),
             type=AuthorizationType.CODE,
             redirect_url=_redirect_url,
         )
@@ -157,18 +159,22 @@ class SaxoOpenAPIClient:
         )
         self._token_data = refreshed_token_data
 
+    @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
         response = handle_api_response(self.openapi_request("GET", path, params))
         return response.json()
 
+    @logger.catch(reraise=True)
     def post(self, path: str, data: dict, params: Optional[Dict] = None) -> dict:
         response = handle_api_response(self.openapi_request("POST", path, params, data))
         return response.json()
 
+    @logger.catch(reraise=True)
     def put(self, path: str, data: dict, params: Optional[Dict] = None) -> None:
         # always returns 204 No Content
         handle_api_response(self.openapi_request("PUT", path, params, data))
 
+    @logger.catch(reraise=True)
     def patch(
         self, path: str, data: dict, params: Optional[Dict] = None
     ) -> Optional[dict]:
@@ -184,6 +190,7 @@ class SaxoOpenAPIClient:
         else:
             return None
 
+    @logger.catch(reraise=True)
     def delete(self, path: str, params: Optional[Dict] = None) -> None:
         # always returns 204 No Content
         handle_api_response(self.openapi_request("DELETE", path, params))
@@ -215,7 +222,9 @@ class SaxoOpenAPIClient:
                 params=params,
                 json=data,
                 headers={
-                    "x-request-id": f"saxo-apy/{token_urlsafe(20)}",
+                    "x-request-id": (
+                        f"saxo-apy/{self.client_session_id}/{token_urlsafe(20)}"
+                    ),
                 },
             )
 

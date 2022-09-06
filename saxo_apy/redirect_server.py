@@ -1,43 +1,57 @@
 import logging
 import threading
+from urllib.parse import parse_qs
 
 from flask import Flask, request
-from pydantic import AnyHttpUrl
+from loguru import logger
+from pydantic import AnyHttpUrl, parse_obj_as
 from werkzeug.serving import make_server
 
-
-class RedirectServer(threading.Thread):
-    """Simple redirect server to catch callback from Saxo SSO.
-
-    A custom str value 'callback_url' is created on the server app object to indicate
-    whether a callback has been received.
-    """
-
-    def __init__(self, redirect_url: AnyHttpUrl):
-
-        app = Flask(__name__)
-        self.callback_url = None
-
-        assert redirect_url.path
-
-        @app.route(redirect_url.path)
-        def handle_redirect() -> str:
-            self.callback_url = request.url
-            if "error" not in request.url:
-                display_text = "✅ Login succeeded! Please return to the application."
-            else:
-                display_text = (
-                    "🚫 It looks like an error occurred - check the application for "
-                    "details."
-                )
-            return f"""
+response_html = """
 <center><h2 style='font-family: sans-serif;'>
 {display_text}
 </h2></center>
 """
 
+
+class RedirectServer(threading.Thread):
+    """Simple redirect server to catch callback from Saxo SSO."""
+
+    def __init__(self, redirect_url: AnyHttpUrl, state: str):
+        logger.debug(f"initializing redirect server with {str(redirect_url)=}")
+        app = Flask(__name__)
+        self.auth_code = None
+
+        @app.route(str(redirect_url.path))
+        def handle_redirect() -> str:
+            logger.debug(f"redirect server received callback: {request.url}")
+
+            redirect_location = parse_obj_as(AnyHttpUrl, request.url)
+            parsed_qs = parse_qs(redirect_location.query)
+
+            if (
+                not parsed_qs.get("state")
+                or parsed_qs.get("state")[0] != state  # type:ignore[index]
+            ):
+                logger.warning(
+                    "received request without state or mismatching state: "
+                    f"{parsed_qs.get('state')}"
+                )
+                display_text = "This is a redirect server."
+            elif "code" in parsed_qs:
+                logger.success("redirect URL auth code found")
+                self.auth_code = parsed_qs["code"][0]
+                display_text = "✅ Login succeeded! Please return to the application."
+            else:
+                logger.error(
+                    "no auth code found in redirect - authentication error occurred "
+                    f"{request.url=}"
+                )
+                display_text = f"🚫 It looks like an error occurred - {request.url=}"
+            return response_html.format(display_text=display_text)
+
         threading.Thread.__init__(self)
-        host = "0.0.0.0"  # for local redirect or deployed instance
+        host = "0.0.0.0"
         port = redirect_url.port
 
         assert port
@@ -49,7 +63,9 @@ class RedirectServer(threading.Thread):
         ).disabled = True  # disable server logging to stdout
 
     def run(self) -> None:
+        logger.debug("starting redirect server")
         self.server.serve_forever()
 
     def shutdown(self) -> None:
+        logger.debug("terminating redirect server")
         self.server.shutdown()

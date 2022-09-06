@@ -70,19 +70,19 @@ class OpenAPIAppConfig(BaseModel):
     @root_validator
     def validate_redirect_urls_contains_localhost(cls, values: dict) -> dict:
         available_hosts = [url.host for url in values["redirect_urls"]]
-        assert (
-            "localhost" in available_hosts
-        ), "at least 1 'localhost' redirect url required in app config"
-
+        assert "localhost" in available_hosts, (
+            "at least 1 'localhost' redirect URL required in app config - "
+            f"hosts: {available_hosts}"
+        )
         return values
 
     @root_validator
     def validate_port_configuration_redirect_urls(cls, values: dict) -> dict:
-        # all urls need port to be configured
         assert all([url.port for url in values["redirect_urls"]]), (
-            "one or more redirect urls have no port configured, which is required "
+            "one or more redirect URLs have no port configured, which is required "
             "for grant type 'Code' - ensure a port is configured in the app config "
-            "object for each url (example: http://localhost:23432/redirect)"
+            "object for each URL (example: http://localhost:23432/redirect) - "
+            f"URLs: {[str(url) for url in values['redirect_urls']]}"
         )
         return values
 
@@ -141,14 +141,6 @@ class TokenData(BaseModel):
         values["write_permission"] = True if payload["oaa"] == "77770" else False
 
         return values
-
-
-class StateMismatchError(Exception):
-    pass
-
-
-class AuthorizationError(Exception):
-    pass
 
 
 class NotLoggedInError(Exception):
