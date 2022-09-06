@@ -28,7 +28,7 @@ def test_default_session_headers() -> None:
 
     expected_headers = {
         "accept-encoding": "gzip",
-        "user-agent": "saxo-apy/0.1.0",
+        "user-agent": "saxo-apy/0.1.7",
         "connection": "keep-alive",
         "cache-control": "no-cache",
         "accept": "application/json; charset=utf-8",

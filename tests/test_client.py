@@ -1,3 +1,4 @@
+import re
 import time
 
 from pydantic import ValidationError, parse_obj_as
@@ -54,11 +55,11 @@ def test_init_valid_config(config: dict, env: APIEnvironment) -> None:
     [
         (
             "https://example.com:12321/redirect",
-            "at least 1 'localhost' redirect url required in app config",
+            "at least 1 'localhost'",
         ),
         (
             "https://localhost/redirect",
-            "one or more redirect urls have no port configured",
+            "have no port configured",
         ),
     ],
 )
