@@ -4,6 +4,7 @@ from typing import Dict, Optional, Union
 from urllib.parse import urlencode
 
 import requests
+from loguru import logger
 from pydantic import AnyHttpUrl, parse_obj_as
 from requests import Response
 from requests.structures import CaseInsensitiveDict
@@ -43,6 +44,9 @@ def validate_redirect_url(
     app_config: OpenAPIAppConfig, redirect_url: Optional[AnyHttpUrl]
 ) -> AnyHttpUrl:
     if not redirect_url:
+        logger.debug(
+            "no redirect URL provided - defaulting to first localhost in config"
+        )
         # defaults to first available localhost redirect for convenience
         _redirect_url: AnyHttpUrl = [
             url for url in app_config.redirect_urls if url.host == "localhost"
@@ -81,6 +85,7 @@ def exercise_authorization(
 ) -> TokenData:
     """Exercises either a auth code (to complete login) or a refresh token."""
 
+    logger.debug(f"exercising authorization with grant type: {type}")
     if type is AuthorizationType.CODE:
         authorization_param = "code"
     elif type is AuthorizationType.REFRESH_TOKEN:
@@ -96,11 +101,13 @@ def exercise_authorization(
 
     response = requests.post(app_config.token_endpoint, params=token_request_params)
 
-    if not response.status_code == 201:
+    if response.status_code != 201:
         raise RuntimeError(
             "unexpected error occurred while retrieving token - response status: "
             f"{response.status_code}"
         )
+
+    logger.success("successfully exercised authorization - new token data retrieved")
 
     received_token_data = response.json()
     received_token_data.update({"redirect_url": redirect_url})

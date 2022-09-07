@@ -18,7 +18,6 @@ class RedirectServer(threading.Thread):
     """Simple redirect server to catch callback from Saxo SSO."""
 
     def __init__(self, redirect_url: AnyHttpUrl, state: str):
-        logger.debug(f"initializing redirect server with {str(redirect_url)=}")
         app = Flask(__name__)
         self.auth_code = None
 
@@ -54,13 +53,15 @@ class RedirectServer(threading.Thread):
         host = "0.0.0.0"
         port = redirect_url.port
 
+        logger.debug(f"initializing redirect server: {host}:{port}{redirect_url.path}")
+
         assert port
         self.server = make_server(host, int(port), app)
         self.ctx = app.app_context()
         self.ctx.push()
         logging.getLogger(
             "werkzeug"
-        ).disabled = True  # disable server logging to stdout
+        ).disabled = True  # disable default server logging to stdout
 
     def run(self) -> None:
         logger.debug("starting redirect server")

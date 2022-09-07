@@ -1,3 +1,4 @@
+import threading
 import webbrowser
 from datetime import datetime
 from secrets import token_urlsafe
@@ -70,7 +71,9 @@ class SaxoOpenAPIClient:
         redirect_url: Optional[AnyHttpUrl] = None,
         with_browser: bool = True,
         with_server: bool = True,
+        auto_refresh: bool = False,
     ) -> None:
+        logger.debug("initializing login sequence")
         _redirect_url = validate_redirect_url(self._app_config, redirect_url)
         state = token_urlsafe(20)
         auth_url = construct_auth_url(self._app_config, _redirect_url, state)
@@ -146,6 +149,11 @@ class SaxoOpenAPIClient:
                 "client can create and change orders on your Saxo account!"
             )
 
+        if auto_refresh:
+            self.start_auto_refresh()
+
+        logger.success("login completed successfully")
+
     def refresh(self) -> None:
         assert self.logged_in
         refreshed_token_data = exercise_authorization(
@@ -158,6 +166,35 @@ class SaxoOpenAPIClient:
             {"authorization": f"Bearer {refreshed_token_data.access_token}"}
         )
         self._token_data = refreshed_token_data
+
+    def start_auto_refresh(self) -> None:
+        def refresh_loop() -> None:
+            logger.debug(
+                f"access token valid until: {self.access_token_expiry}, "
+                f"which is {self.time_to_expiry} seconds from now"
+            )
+
+            if self.time_to_expiry < 60:
+                logger.debug("time to expiry less than 1 minute - kicking off refresh")
+                self.refresh()
+
+            logger.debug(
+                f"access token valid until: {self.access_token_expiry}, "
+                f"which is {self.time_to_expiry} seconds from now"
+            )
+
+            delay_time = self.time_to_expiry - 30
+            logger.debug(
+                f"setting delay for next refresh in {delay_time} seconds, at: "
+                f"{unix_seconds_to_datetime(int(time())+delay_time)}"
+            )
+
+            refresh_thread = threading.Timer(delay_time, refresh_loop)
+            refresh_thread.name = "RefreshThread"
+            refresh_thread.start()
+            logger.success(f"refresh thread started with id: {refresh_thread.ident}")
+
+        refresh_loop()
 
     @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
@@ -209,11 +246,6 @@ class SaxoOpenAPIClient:
                 "requested path does not start with '/' and won't be able to be "
                 f"resolved by OpenAPI: {path}"
             )
-
-        # refresh access token if it has expired
-        # refresh token will be valid (checked by self.logged_in)
-        if time() > self._token_data.access_token_expiry:  # type: ignore[union-attr]
-            self.refresh()
 
         with self._http_session as session:
             return session.request(
@@ -270,6 +302,12 @@ class SaxoOpenAPIClient:
         return unix_seconds_to_datetime(
             self._token_data.access_token_expiry  # type: ignore[union-attr]
         )
+
+    @property
+    def time_to_expiry(self) -> int:
+        assert self.logged_in
+        token_expiry = self._token_data.access_token_expiry  # type: ignore[union-attr]
+        return token_expiry - int(time())
 
     @property
     def refresh_token_expiry(self) -> datetime:
