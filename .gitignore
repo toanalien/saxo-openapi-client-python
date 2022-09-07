@@ -26,7 +26,7 @@ script*.ipynb
 /dist
 
 # app config
-app_config.json
+app_config*.json
 
 # logfiles
 *log.txt
