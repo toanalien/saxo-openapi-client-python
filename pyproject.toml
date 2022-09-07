@@ -20,7 +20,7 @@ dependencies = [
   "pydantic==1.10.2",
   "requests==2.28.1",
   "PyJWT==2.4.0",
-  "loguru=0.6.0"
+  "loguru==0.6.0"
 ]
 
 [project.urls]
