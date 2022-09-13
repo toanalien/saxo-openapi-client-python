@@ -68,7 +68,6 @@ def construct_auth_url(
         "client_id": app_config.client_id,
         "state": state,
         "redirect_uri": redirect_url,
-        "client_secret": app_config.client_secret,
     }
 
     return parse_obj_as(
