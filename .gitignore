@@ -17,7 +17,7 @@ script*.py
 script*.ipynb
 
 # coverage
-.coverage
+.coverage*
 
 # Mac stuff
 *.DS_store

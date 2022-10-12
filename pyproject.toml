@@ -2,24 +2,24 @@
 name = "saxo-apy"
 version = "0.1.9"
 authors = [
-  { name="Gid van der Ven", email="me@gid.works" },
+  {name="Gid van der Ven", email="giddevanderven@gmail.com"}
 ]
 description = "Python Client for Saxo Bank OpenAPI"
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.7"
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Development Status :: 4 - Beta",
-    "Natural Language :: English"
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Development Status :: 4 - Beta",
+  "Natural Language :: English"
 ]
 dependencies = [
   "Flask==2.2.2",
   "pydantic==1.10.2",
   "requests==2.28.1",
-  "PyJWT==2.4.0",
+  "PyJWT==2.5.0",
   "loguru==0.6.0"
 ]
 
