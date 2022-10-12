@@ -74,6 +74,7 @@ This package requires 4 dependencies:
 - `Flask`, to run a local server and catch the callback from Saxo SSO
 - `requests`, for sending requests to OpenAPI and managing the session
 - `PyJWT`, for parsing and validating access tokens
+- `loguru`, to handle logging
 
 
 ## Notes
