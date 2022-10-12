@@ -22,13 +22,13 @@ from saxo_apy.utils import (
 from .fixtures.models import DUMMY_LIVE_CONFIG, DUMMY_SIM_CONFIG, MockAuthResponse
 
 
-def test_default_session_headers() -> None:
+def test_make_default_session_headers() -> None:
     headers = make_default_session_headers()
     assert isinstance(headers, CaseInsensitiveDict)
 
     expected_headers = {
         "accept-encoding": "gzip",
-        "user-agent": "saxo-apy/0.1.7",
+        "user-agent": "saxo-apy/0.1.9",
         "connection": "keep-alive",
         "cache-control": "no-cache",
         "accept": "application/json; charset=utf-8",
@@ -81,7 +81,6 @@ def test_construct_auth_url(config: dict) -> None:
     querystring = parse_qs(auth_url.query)
     assert querystring["response_type"][0] == _config.grant_type.value.lower()
     assert querystring["client_id"][0] == _config.client_id
-    assert querystring["client_secret"][0] == _config.client_secret
     assert querystring["state"][0] == "state123"
     assert querystring["redirect_uri"][0] == _config.redirect_urls[0]
 
