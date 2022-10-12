@@ -98,6 +98,7 @@ class SaxoOpenAPIClient:
                 while not redirect_server.auth_code:
                     sleep(0.1)
                 print("📞 received callback from Saxo SSO")
+                _auth_code = redirect_server.auth_code
             except KeyboardInterrupt:
                 print("🛑 operation interrupted by user - shutting down")
                 return
@@ -112,6 +113,7 @@ class SaxoOpenAPIClient:
                         AnyHttpUrl, redirect_location_input
                     )
                     parsed_qs = parse_qs(redirect_location.query)
+                    _auth_code = parsed_qs["code"][0]
                 except ValidationError as e:
                     print(f"❌ failed to parse provided url due to error(s): {e}")
                 except KeyboardInterrupt:
@@ -120,7 +122,7 @@ class SaxoOpenAPIClient:
 
         token_data = exercise_authorization(
             app_config=self._app_config,
-            authorization=parse_obj_as(AuthorizationCode, redirect_server.auth_code),
+            authorization=parse_obj_as(AuthorizationCode, _auth_code),
             type=AuthorizationType.CODE,
             redirect_url=_redirect_url,
         )
@@ -132,7 +134,7 @@ class SaxoOpenAPIClient:
 
         assert self._app_config.env
         env_msg = "🛠 SIM" if self._app_config.env is APIEnvironment.SIM else "🎉 LIVE"
-        perm = "🔧 write / 📈 trade" if self._token_data.write_permission else "👀 read"
+        perm = "WRITE / TRADE" if self._token_data.write_permission else "READ"
 
         print(
             f"✅ authorization succeeded - connected to {env_msg} environment with "
@@ -168,7 +170,7 @@ class SaxoOpenAPIClient:
         self._token_data = refreshed_token_data
 
     def start_auto_refresh(self) -> None:
-        def refresh_loop() -> None:
+        def refresh_service() -> None:
             logger.debug(
                 f"access token valid until: {self.access_token_expiry}, "
                 f"which is {self.time_to_expiry} seconds from now"
@@ -178,23 +180,18 @@ class SaxoOpenAPIClient:
                 logger.debug("time to expiry less than 1 minute - kicking off refresh")
                 self.refresh()
 
-            logger.debug(
-                f"access token valid until: {self.access_token_expiry}, "
-                f"which is {self.time_to_expiry} seconds from now"
-            )
-
             delay_time = self.time_to_expiry - 30
             logger.debug(
-                f"setting delay for next refresh in {delay_time} seconds, at: "
+                f"setting delay of {delay_time} seconds for next refresh at: "
                 f"{unix_seconds_to_datetime(int(time())+delay_time)}"
             )
 
-            refresh_thread = threading.Timer(delay_time, refresh_loop)
+            refresh_thread = threading.Timer(delay_time, refresh_service)
             refresh_thread.name = "RefreshThread"
             refresh_thread.start()
             logger.success(f"refresh thread started with id: {refresh_thread.ident}")
 
-        refresh_loop()
+        refresh_service()
 
     @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
