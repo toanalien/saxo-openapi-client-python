@@ -151,4 +151,10 @@ def handle_api_response(response: Response) -> Response:
             f"server trace id: {response.headers.get('x-correlation')}\n"
             f"timestamp (UTC): {datetime.utcnow()} - env: {env}"
         )
+
+    logger.success(
+        "successfully performed API request with X-Request-Id: "
+        f"{response.request.headers['x-request-id']}"
+    )
+
     return response

@@ -244,18 +244,30 @@ class SaxoOpenAPIClient:
                 f"resolved by OpenAPI: {path}"
             )
 
+        headers = {
+            "x-request-id": (f"saxo-apy/{self.client_session_id}/{token_urlsafe(20)}"),
+        }
+
+        logger.debug(
+            f"performing request: {method} {self.api_base_url}{path}, "
+            f"{params=}, {data=}, {headers=}"
+        )
+
         with self._http_session as session:
-            return session.request(
+            response = session.request(
                 method,
                 f"{self.api_base_url}{path}",
                 params=params,
                 json=data,
-                headers={
-                    "x-request-id": (
-                        f"saxo-apy/{self.client_session_id}/{token_urlsafe(20)}"
-                    ),
-                },
+                headers=headers,
             )
+
+        logger.debug(
+            f"response received with status: {response.status_code}, X-Correlation: "
+            f"{response.headers.get('X-Correlation')}"
+        )
+
+        return response
 
     @property
     def available_redirect_urls(self) -> List[AnyHttpUrl]:
