@@ -158,6 +158,7 @@ class SaxoOpenAPIClient:
 
     def refresh(self) -> None:
         assert self.logged_in
+
         refreshed_token_data = exercise_authorization(
             app_config=self._app_config,
             authorization=self._token_data.refresh_token,  # type: ignore[union-attr]
@@ -170,6 +171,12 @@ class SaxoOpenAPIClient:
         self._token_data = refreshed_token_data
 
     def start_auto_refresh(self) -> None:
+        existing_thread = [
+            thread for thread in threading.enumerate() if thread.name == "RefreshThread"
+        ]
+        if len(existing_thread) > 0 and existing_thread[0].is_alive():
+            raise RuntimeError("refresh thread already running")
+
         def refresh_service() -> None:
             logger.debug(
                 f"access token valid until: {self.access_token_expiry}, "
