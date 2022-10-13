@@ -170,7 +170,7 @@ class SaxoOpenAPIClient:
         )
         self._token_data = refreshed_token_data
 
-    def start_auto_refresh(self) -> None:
+    def start_auto_refresh(self, delay_time: Union[int, None] = None) -> None:
         existing_thread = [
             thread for thread in threading.enumerate() if thread.name == "RefreshThread"
         ]
@@ -183,17 +183,20 @@ class SaxoOpenAPIClient:
                 f"which is {self.time_to_expiry} seconds from now"
             )
 
-            if self.time_to_expiry < 60:
-                logger.debug("time to expiry less than 1 minute - kicking off refresh")
+            if delay_time or self.time_to_expiry < 60:
+                logger.debug(
+                    "delay passed or time to expiry less than 1 minute - refreshing"
+                )
                 self.refresh()
 
-            delay_time = self.time_to_expiry - 30
+            _delay_time = delay_time or self.time_to_expiry - 30
+
             logger.debug(
-                f"setting delay of {delay_time} seconds for next refresh at: "
-                f"{unix_seconds_to_datetime(int(time())+delay_time)}"
+                f"setting delay of {_delay_time} seconds for next refresh at: "
+                f"{unix_seconds_to_datetime(int(time())+_delay_time)}"
             )
 
-            refresh_thread = threading.Timer(delay_time, refresh_service)
+            refresh_thread = threading.Timer(_delay_time, refresh_service)
             refresh_thread.name = "RefreshThread"
             refresh_thread.start()
             logger.success(f"refresh thread started with id: {refresh_thread.ident}")
