@@ -15,8 +15,8 @@ from pydantic import (
     root_validator,
 )
 
-SIM_STREAMING_URL = "https://streaming.saxobank.com/sim/openapi/streamingws/"
-LIVE_STREAMING_URL = "https://streaming.saxobank.com/openapi/streamingws/"
+SIM_STREAMING_URL = "wss://streaming.saxobank.com/sim/openapi/streamingws"
+LIVE_STREAMING_URL = "wss://streaming.saxobank.com/openapi/streamingws"
 
 
 class ClientId(ConstrainedStr):
