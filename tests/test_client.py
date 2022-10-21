@@ -95,5 +95,4 @@ def test_token_expiries() -> None:
     client = SaxoOpenAPIClient(app_config=DUMMY_SIM_CONFIG)
     client._token_data = DUMMY_TOKEN_DATA
 
-    assert client.refresh_token_expiry.timestamp() > time.time()
     assert client.access_token_expiry.timestamp() > time.time()

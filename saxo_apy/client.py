@@ -1,3 +1,11 @@
+"""
+Saxo Bank OpenAPI Python Client.
+
+This module contains the SaxoOpenAPIClient class which is the main interface to interact
+with Saxo Bank OpenAPI.
+"""
+
+import asyncio
 import threading
 import webbrowser
 from datetime import datetime
@@ -6,10 +14,10 @@ from time import sleep, time
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
-import websockets
 from loguru import logger
 from pydantic import AnyHttpUrl, ValidationError, parse_obj_as
 from requests import Response, Session
+from websockets import client as ws_client
 
 from .models import (
     APIEnvironment,
@@ -45,8 +53,19 @@ class SaxoOpenAPIClient:
 
     @logger.catch(reraise=True)
     def __init__(
-        self, app_config: dict, log_sink: str = None, log_level: str = "DEBUG"
+        self,
+        app_config: dict,
+        log_sink: str = None,
+        log_level: str = "DEBUG",
     ):
+        """Create a new instance of SaxoOpenAPIClient.
+
+        `app_config` should be a dictionary containing app config from Developer Portal.
+
+        Set `log_sink` and `log_level` to adjust logging output (useful if errors are
+        encountered). Default: no logs are written, log level is `DEBUG` if sink is
+        provided.
+        """
         if log_sink:
             logger.add(
                 log_sink,
@@ -58,7 +77,9 @@ class SaxoOpenAPIClient:
             )
 
         self.client_session_id: str = token_urlsafe(10)
-        logger.debug(f"initializing OpenAPI Client with {self.client_session_id=}")
+        logger.debug(
+            f"initializing OpenAPI Client with session id: {self.client_session_id}"
+        )
 
         self._app_config: OpenAPIAppConfig = parse_obj_as(OpenAPIAppConfig, app_config)
         self._http_session: Session = Session()
@@ -72,21 +93,31 @@ class SaxoOpenAPIClient:
     def login(
         self,
         redirect_url: Optional[AnyHttpUrl] = None,
-        with_browser: bool = True,
-        with_server: bool = True,
-        auto_refresh: bool = False,
+        launch_browser: bool = True,
+        catch_redirect: bool = True,
+        start_refresh_thread: bool = False,
     ) -> None:
+        """Log in to Saxo OpenAPI using the provided config provided in __init__().
+
+        Defaults to first `localhost` in config (if not provided).
+
+        - Use `launch_browser` to automatically show login page.
+        - Use `catch_redirect` to start a server that will listen for the post-login
+        redirect from Saxo SSO.
+        - Use `start_refresh_thread` to directly start a Timer thread post-login that
+        will keep the session authenticated (for use in Jupyter Notebooks).
+        """
         logger.debug("initializing login sequence")
         _redirect_url = validate_redirect_url(self._app_config, redirect_url)
         state = token_urlsafe(20)
         auth_url = construct_auth_url(self._app_config, _redirect_url, state)
         logger.debug(f"logging in with {str(_redirect_url)=} and {str(auth_url)=}")
 
-        if with_server:
+        if catch_redirect:
             redirect_server = RedirectServer(_redirect_url, state=state)
             redirect_server.start()
 
-        if with_browser:
+        if launch_browser:
             logger.debug("launching browser with login page")
             print(
                 "🌐 opening login page in browser - waiting for user to "
@@ -96,7 +127,7 @@ class SaxoOpenAPIClient:
         else:
             print(f"🌐 navigate to the following web page to log in: {auth_url}")
 
-        if with_server:
+        if catch_redirect:
             try:
                 while not redirect_server.auth_code:
                     sleep(0.1)
@@ -136,7 +167,7 @@ class SaxoOpenAPIClient:
         self._token_data = token_data
 
         assert self._app_config.env
-        env_msg = "🛠 SIM" if self._app_config.env is APIEnvironment.SIM else "🎉 LIVE"
+        env_msg = self._app_config.env.value
         perm = "WRITE / TRADE" if self._token_data.write_permission else "READ"
 
         print(
@@ -154,12 +185,19 @@ class SaxoOpenAPIClient:
                 "client can create and change orders on your Saxo account!"
             )
 
-        if auto_refresh:
-            self.start_auto_refresh()
+        if start_refresh_thread:
+            self.start_auto_refresh_thread()
 
         logger.success("login completed successfully")
 
+    @logger.catch(reraise=True)
     def refresh(self) -> None:
+        """Exercise refresh token and re-authorize streaming connection (if available).
+
+        Automatically updates htt_session headers with new token and sends PUT request
+        for the streaming websocket connection (if available).
+        """
+        logger.info("refreshing API session")
         assert self.logged_in
 
         refreshed_token_data = exercise_authorization(
@@ -176,7 +214,7 @@ class SaxoOpenAPIClient:
         if self.streaming_connection:
             logger.info(
                 "found streaming connection with context_id: "
-                f"{self.streaming_context_id} - re-authorizing..."
+                f"{self.streaming_context_id} - re-authorizing"
             )
             self.put(
                 "/streamingws/authorize",
@@ -184,7 +222,27 @@ class SaxoOpenAPIClient:
                 params={"ContextId": self.streaming_context_id},
             )
 
-    def start_auto_refresh(self, delay_time: Union[int, None] = None) -> None:
+        logger.info("successfully refreshed API session")
+
+    @logger.catch(reraise=True)
+    async def async_refresh(self) -> None:
+        """Refresh the session automatically in an async loop."""
+        while self.logged_in:
+            delay = self.time_to_expiry - 30
+            logger.info(
+                f"async refresh will kick off refresh loop in {delay} seconds at: "
+                f"{unix_seconds_to_datetime(int(time()) + delay)}"
+            )
+            await asyncio.sleep(delay)
+            logger.info("async refresh delay has passed - kicking off refresh")
+            self.refresh()
+
+    @logger.catch(reraise=True)
+    def start_auto_refresh_thread(self, delay_time: Union[int, None] = None) -> None:
+        """Launch a refresh thread that will keep the session authenticated.
+
+        Useful to keep Jupyter Notebooks authenticated.
+        """
         existing_thread = [
             thread for thread in threading.enumerate() if thread.name == "RefreshThread"
         ]
@@ -217,8 +275,16 @@ class SaxoOpenAPIClient:
 
         refresh_service()
 
-    def create_streaming_connection(self) -> None:
+    @logger.catch(reraise=True)
+    def setup_streaming_connection(self) -> None:
+        """Configure a streaming websocket connection.
+
+        This connection is used to receive messages from the OpenAPI Streaming Service.
+        """
         assert self.logged_in
+
+        if self.streaming_connection:
+            raise RuntimeError("streaming connection already created")
 
         self.streaming_context_id = token_urlsafe(10)
         url = (
@@ -229,17 +295,19 @@ class SaxoOpenAPIClient:
             "Authorization": "Bearer "
             f"{self._token_data.access_token}"  # type: ignore[union-attr]
         }
-        self.streaming_connection = websockets.connect(  # type: ignore[attr-defined]
+        self.streaming_connection = ws_client.connect(  # type: ignore[attr-defined]
             url, extra_headers=headers
         )
 
     @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
+        """Send GET request to OpenAPI and handle response."""
         response = handle_api_response(self.openapi_request("GET", path, params))
         return response.json()
 
     @logger.catch(reraise=True)
     def post(self, path: str, data: dict, params: Optional[Dict] = None) -> dict:
+        """Send POST request to OpenAPI and handle response."""
         response = handle_api_response(self.openapi_request("POST", path, params, data))
         return response.json()
 
@@ -247,13 +315,15 @@ class SaxoOpenAPIClient:
     def put(
         self, path: str, data: Optional[dict], params: Optional[Dict] = None
     ) -> None:
-        # always returns 204 No Content
+        """Send PUT request to OpenAPI and handle response."""
+        # always returns 202 Accepted or 204 No Content
         handle_api_response(self.openapi_request("PUT", path, params, data))
 
     @logger.catch(reraise=True)
     def patch(
         self, path: str, data: dict, params: Optional[Dict] = None
     ) -> Optional[dict]:
+        """Send PATCH request to OpenAPI and handle response."""
         response = handle_api_response(
             self.openapi_request("PATCH", path, params, data)
         )
@@ -268,6 +338,7 @@ class SaxoOpenAPIClient:
 
     @logger.catch(reraise=True)
     def delete(self, path: str, params: Optional[Dict] = None) -> None:
+        """Send DELETE request to OpenAPI and handle response."""
         # always returns 204 No Content
         handle_api_response(self.openapi_request("DELETE", path, params))
 
@@ -278,6 +349,7 @@ class SaxoOpenAPIClient:
         params: Optional[Dict] = None,
         data: Optional[Dict] = None,
     ) -> Response:
+        """Send a request to OpenAPI without additional handling of the response."""
         assert self.logged_in
 
         if not path.startswith("/"):
@@ -313,21 +385,22 @@ class SaxoOpenAPIClient:
 
     @property
     def available_redirect_urls(self) -> List[AnyHttpUrl]:
-        """Convenience function to select available redirect URLs for login."""
+        """Retrieve available redirect URLs for login from app config."""
         return self._app_config.redirect_urls
 
     @property
     def api_base_url(self) -> HttpsUrl:
-        """Used by .openapi_request() to construct request URL."""
+        """Retrieve base URL to construct requests with."""
         return self._app_config.api_base_url
 
     @property
     def streaming_url(self) -> HttpsUrl:
+        """Retrieve streaming URL to set up websocket connection."""
         return self._app_config.streaming_url  # type: ignore[return-value]
 
     @property
     def logged_in(self) -> bool:
-        """Checks if the client is connected with a valid session to OpenAPI.
+        """Check if the client is connected with a valid session to OpenAPI.
 
         If no token data is available, the client is not logged in (yet).
         If the refresh token has expired, the client is effectively disconnected.
@@ -338,17 +411,17 @@ class SaxoOpenAPIClient:
             assert self._token_data
         except AssertionError:
             raise NotLoggedInError(
-                "no active session found - connect your client with '.login()'"
+                "no active session found - connect the client with '.login()'"
             )
         if time() > self._token_data.refresh_token_expiry:
             raise TokenExpiredError(
-                "refresh token has expired - reconnect your client with '.login()'"
+                "refresh token has expired - reconnect the client with '.login()'"
             )
         return True
 
     @property
     def access_token_expiry(self) -> datetime:
-        """Convenience function to check expiry of access token"""
+        """Retrieve human-readable access token expiry."""
         assert self.logged_in
         return unix_seconds_to_datetime(
             self._token_data.access_token_expiry  # type: ignore[union-attr]
@@ -356,14 +429,7 @@ class SaxoOpenAPIClient:
 
     @property
     def time_to_expiry(self) -> int:
+        """Retrieve time in seconds until access token expires."""
         assert self.logged_in
         token_expiry = self._token_data.access_token_expiry  # type: ignore[union-attr]
         return token_expiry - int(time())
-
-    @property
-    def refresh_token_expiry(self) -> datetime:
-        """Convenience function to check expiry of refresh token"""
-        assert self.logged_in
-        return unix_seconds_to_datetime(
-            self._token_data.refresh_token_expiry  # type: ignore[union-attr]
-        )
