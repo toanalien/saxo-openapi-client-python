@@ -3,9 +3,10 @@ import webbrowser
 from datetime import datetime
 from secrets import token_urlsafe
 from time import sleep, time
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
+import websockets
 from loguru import logger
 from pydantic import AnyHttpUrl, ValidationError, parse_obj_as
 from requests import Response, Session
@@ -63,6 +64,8 @@ class SaxoOpenAPIClient:
         self._http_session: Session = Session()
         self._http_session.headers = make_default_session_headers()
         self._token_data: Union[TokenData, None] = None
+        self.streaming_context_id: Union[str, None] = None
+        self.streaming_connection: Any = None
         logger.success("successfully parsed app config and initialized OpenAPI Client")
 
     @logger.catch(reraise=True)
@@ -170,6 +173,17 @@ class SaxoOpenAPIClient:
         )
         self._token_data = refreshed_token_data
 
+        if self.streaming_connection:
+            logger.info(
+                "found streaming connection with context_id: "
+                f"{self.streaming_context_id} - re-authorizing..."
+            )
+            self.put(
+                "/streamingws/authorize",
+                data=None,
+                params={"ContextId": self.streaming_context_id},
+            )
+
     def start_auto_refresh(self, delay_time: Union[int, None] = None) -> None:
         existing_thread = [
             thread for thread in threading.enumerate() if thread.name == "RefreshThread"
@@ -185,7 +199,7 @@ class SaxoOpenAPIClient:
 
             if delay_time or self.time_to_expiry < 60:
                 logger.debug(
-                    "delay passed or time to expiry less than 1 minute - refreshing"
+                    "time to expiry less than 1 minute (or delay passed) - refreshing"
                 )
                 self.refresh()
 
@@ -203,6 +217,22 @@ class SaxoOpenAPIClient:
 
         refresh_service()
 
+    def create_streaming_connection(self) -> None:
+        assert self.logged_in
+
+        self.streaming_context_id = token_urlsafe(10)
+        url = (
+            f"{self._app_config.streaming_url}/connect?contextId="
+            f"{self.streaming_context_id}"
+        )
+        headers = {
+            "Authorization": "Bearer "
+            f"{self._token_data.access_token}"  # type: ignore[union-attr]
+        }
+        self.streaming_connection = websockets.connect(  # type: ignore[attr-defined]
+            url, extra_headers=headers
+        )
+
     @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
         response = handle_api_response(self.openapi_request("GET", path, params))
@@ -214,7 +244,9 @@ class SaxoOpenAPIClient:
         return response.json()
 
     @logger.catch(reraise=True)
-    def put(self, path: str, data: dict, params: Optional[Dict] = None) -> None:
+    def put(
+        self, path: str, data: Optional[dict], params: Optional[Dict] = None
+    ) -> None:
         # always returns 204 No Content
         handle_api_response(self.openapi_request("PUT", path, params, data))
 
