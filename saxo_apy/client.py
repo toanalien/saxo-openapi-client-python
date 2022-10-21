@@ -237,7 +237,7 @@ class SaxoOpenAPIClient:
             logger.info("async refresh delay has passed - kicking off refresh")
             self.refresh()
 
-    def start_auto_refresh_thread(self, delay_time: Union[int, None] = None) -> None:
+    def start_auto_refresh_thread(self) -> None:
         """Launch a refresh thread that will keep the session authenticated.
 
         Useful to keep Jupyter Notebooks authenticated.
@@ -254,13 +254,12 @@ class SaxoOpenAPIClient:
                 f"which is {self.time_to_expiry} seconds from now"
             )
 
-            if delay_time or self.time_to_expiry < 60:
-                logger.debug(
-                    "time to expiry less than 1 minute (or delay passed) - refreshing"
-                )
+            if self.time_to_expiry < 60:
+                logger.debug("time to expiry less than 1 - kicking off refreshing")
                 self.refresh()
 
-            _delay_time = delay_time or self.time_to_expiry - 30
+            # time to expiry is not updated with new value for refreshed token
+            _delay_time = self.time_to_expiry - 30
 
             logger.debug(
                 f"setting delay of {_delay_time} seconds for next refresh at: "
