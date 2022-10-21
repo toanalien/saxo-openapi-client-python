@@ -51,7 +51,6 @@ class SaxoOpenAPIClient:
     An application config object file is required to initialize this class.
     """
 
-    @logger.catch(reraise=True)
     def __init__(
         self,
         app_config: dict,
@@ -70,7 +69,8 @@ class SaxoOpenAPIClient:
             logger.add(
                 log_sink,
                 format=(
-                    "{time:!UTC} {thread:12} {module:15} {line:3} {level:8} {message}"
+                    "{time:!UTC} {thread:12} {level:8} {module:15} {line:3} "
+                    "{function:25} {message}"
                 ),
                 level=log_level,
                 enqueue=True,
@@ -89,7 +89,6 @@ class SaxoOpenAPIClient:
         self.streaming_connection: Any = None
         logger.success("successfully parsed app config and initialized OpenAPI Client")
 
-    @logger.catch(reraise=True)
     def login(
         self,
         redirect_url: Optional[AnyHttpUrl] = None,
@@ -107,7 +106,10 @@ class SaxoOpenAPIClient:
         - Use `start_refresh_thread` to directly start a Timer thread post-login that
         will keep the session authenticated (for use in Jupyter Notebooks).
         """
-        logger.debug("initializing login sequence")
+        logger.debug(
+            f"initializing login sequence with {redirect_url=}, {launch_browser=} "
+            f"{catch_redirect=} {start_refresh_thread=}"
+        )
         _redirect_url = validate_redirect_url(self._app_config, redirect_url)
         state = token_urlsafe(20)
         auth_url = construct_auth_url(self._app_config, _redirect_url, state)
@@ -190,7 +192,6 @@ class SaxoOpenAPIClient:
 
         logger.success("login completed successfully")
 
-    @logger.catch(reraise=True)
     def refresh(self) -> None:
         """Exercise refresh token and re-authorize streaming connection (if available).
 
@@ -224,7 +225,6 @@ class SaxoOpenAPIClient:
 
         logger.info("successfully refreshed API session")
 
-    @logger.catch(reraise=True)
     async def async_refresh(self) -> None:
         """Refresh the session automatically in an async loop."""
         while self.logged_in:
@@ -237,7 +237,6 @@ class SaxoOpenAPIClient:
             logger.info("async refresh delay has passed - kicking off refresh")
             self.refresh()
 
-    @logger.catch(reraise=True)
     def start_auto_refresh_thread(self, delay_time: Union[int, None] = None) -> None:
         """Launch a refresh thread that will keep the session authenticated.
 
@@ -275,7 +274,6 @@ class SaxoOpenAPIClient:
 
         refresh_service()
 
-    @logger.catch(reraise=True)
     def setup_streaming_connection(self) -> None:
         """Configure a streaming websocket connection.
 
@@ -299,19 +297,16 @@ class SaxoOpenAPIClient:
             url, extra_headers=headers
         )
 
-    @logger.catch(reraise=True)
     def get(self, path: str, params: Optional[Dict] = None) -> dict:
         """Send GET request to OpenAPI and handle response."""
         response = handle_api_response(self.openapi_request("GET", path, params))
         return response.json()
 
-    @logger.catch(reraise=True)
     def post(self, path: str, data: dict, params: Optional[Dict] = None) -> dict:
         """Send POST request to OpenAPI and handle response."""
         response = handle_api_response(self.openapi_request("POST", path, params, data))
         return response.json()
 
-    @logger.catch(reraise=True)
     def put(
         self, path: str, data: Optional[dict], params: Optional[Dict] = None
     ) -> None:
@@ -319,7 +314,6 @@ class SaxoOpenAPIClient:
         # always returns 202 Accepted or 204 No Content
         handle_api_response(self.openapi_request("PUT", path, params, data))
 
-    @logger.catch(reraise=True)
     def patch(
         self, path: str, data: dict, params: Optional[Dict] = None
     ) -> Optional[dict]:
@@ -336,7 +330,6 @@ class SaxoOpenAPIClient:
         else:
             return None
 
-    @logger.catch(reraise=True)
     def delete(self, path: str, params: Optional[Dict] = None) -> None:
         """Send DELETE request to OpenAPI and handle response."""
         # always returns 204 No Content
