@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Dict, Optional, Union
@@ -17,6 +18,7 @@ from .models import (
     HttpsUrl,
     OpenAPIAppConfig,
     RefreshToken,
+    StreamingMessage,
     TokenData,
 )
 
@@ -158,3 +160,22 @@ def handle_api_response(response: Response) -> Response:
     )
 
     return response
+
+
+def decode_streaming_message(message: bytes) -> StreamingMessage:
+    """Convert streaming message to dict."""
+    logger.debug(f"received streaming message: {str(message)}")
+    message_id = int.from_bytes(message[0:8], byteorder="little")
+    ref_id_len = int(message[10])
+    ref_id = message[11 : 11 + ref_id_len].decode()
+    format = int(message[11 + ref_id_len])
+    if format != 0:
+        raise RuntimeError(
+            "unsupported payload format received on streaming connection: {format}"
+        )
+    payload_size = int.from_bytes(
+        message[12 + ref_id_len : 16 + ref_id_len], byteorder="little"
+    )
+    payload = message[16 + ref_id_len : 16 + ref_id_len + payload_size].decode()
+
+    return StreamingMessage(msg_id=message_id, ref_id=ref_id, data=json.loads(payload))

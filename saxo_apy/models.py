@@ -1,7 +1,7 @@
 from enum import Enum
 from re import compile
 from time import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from jwt import decode
 from pydantic import (
@@ -141,6 +141,12 @@ class TokenData(BaseModel):
         values["write_permission"] = True if payload["oaa"] == "77770" else False
 
         return values
+
+
+class StreamingMessage(BaseModel):
+    msg_id: int
+    ref_id: str
+    data: List[Dict]
 
 
 class NotLoggedInError(Exception):

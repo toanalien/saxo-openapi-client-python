@@ -198,7 +198,7 @@ class SaxoOpenAPIClient:
         Automatically updates htt_session headers with new token and sends PUT request
         for the streaming websocket connection (if available).
         """
-        logger.info("refreshing API session")
+        logger.debug("refreshing API session")
         assert self.logged_in
 
         refreshed_token_data = exercise_authorization(
@@ -213,7 +213,7 @@ class SaxoOpenAPIClient:
         self._token_data = refreshed_token_data
 
         if self.streaming_connection:
-            logger.info(
+            logger.debug(
                 "found streaming connection with context_id: "
                 f"{self.streaming_context_id} - re-authorizing"
             )
@@ -223,18 +223,18 @@ class SaxoOpenAPIClient:
                 params={"ContextId": self.streaming_context_id},
             )
 
-        logger.info("successfully refreshed API session")
+        logger.debug("successfully refreshed API session")
 
     async def async_refresh(self) -> None:
         """Refresh the session automatically in an async loop."""
         while self.logged_in:
             delay = self.time_to_expiry - 30
-            logger.info(
+            logger.debug(
                 f"async refresh will kick off refresh loop in {delay} seconds at: "
                 f"{unix_seconds_to_datetime(int(time()) + delay)}"
             )
             await asyncio.sleep(delay)
-            logger.info("async refresh delay has passed - kicking off refresh")
+            logger.debug("async refresh delay has passed - kicking off refresh")
             self.refresh()
 
     def start_auto_refresh_thread(self) -> None:
