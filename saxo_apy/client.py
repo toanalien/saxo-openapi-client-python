@@ -69,8 +69,8 @@ class SaxoOpenAPIClient:
             logger.add(
                 log_sink,
                 format=(
-                    "{time:!UTC} {thread:12} {level:8} {module:15} {line:3} "
-                    "{function:25} {message}"
+                    "{time:YYYY-MM-DD HH:mm:ss.SSS!UTC}Z {thread:12} {level:8} "
+                    "{module:15} {line:3} {function:25} {message}"
                 ),
                 level=log_level,
                 enqueue=True,
@@ -255,7 +255,7 @@ class SaxoOpenAPIClient:
             )
 
             if self.time_to_expiry < 60:
-                logger.debug("time to expiry less than 1 - kicking off refreshing")
+                logger.debug("time to expiry less than 1 minute - kicking off refresh")
                 self.refresh()
 
             # time to expiry is not updated with new value for refreshed token
