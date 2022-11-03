@@ -86,8 +86,8 @@ def test_logged_in(monkeypatch: MonkeyPatch) -> None:
     assert client.logged_in
 
     # change expiry to value before current time() - client is now disconnected
-    monkeypatch.setattr(client._token_data, "refresh_token_expiry", 1)
-    with raises(TokenExpiredError, match="refresh token has expired"):
+    monkeypatch.setattr(client._token_data, "access_token_expiry", 1)
+    with raises(TokenExpiredError, match="access token has expired"):
         client.logged_in
 
 
