@@ -1,3 +1,5 @@
+"""Utils used by SaxoOpenAPIClient."""
+
 import json
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -24,6 +26,7 @@ from .models import (
 
 
 def configure_logger(log_sink: str, log_level: str) -> None:
+    """Set defaults for log config."""
     logger.add(
         log_sink,
         format=(
@@ -36,6 +39,7 @@ def configure_logger(log_sink: str, log_level: str) -> None:
 
 
 def make_default_session_headers() -> CaseInsensitiveDict:
+    """Set default HTTP session."""
     headers: Dict[str, str] = make_headers(
         keep_alive=True,
         accept_encoding="gzip",
@@ -51,12 +55,14 @@ def make_default_session_headers() -> CaseInsensitiveDict:
 
 
 def unix_seconds_to_datetime(timestamp: int) -> datetime:
+    """Convert unix seconds to human-readable timestamp."""
     return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
 
 def validate_redirect_url(
     app_config: OpenAPIAppConfig, redirect_url: Optional[AnyHttpUrl]
 ) -> AnyHttpUrl:
+    """Check if provided redirect URL for login is valid - or default to config."""
     if not redirect_url:
         logger.debug(
             "no redirect URL provided - defaulting to first localhost in config"
@@ -77,6 +83,7 @@ def validate_redirect_url(
 def construct_auth_url(
     app_config: OpenAPIAppConfig, redirect_url: AnyHttpUrl, state: str
 ) -> HttpsUrl:
+    """Parse app_config to generate auth URL."""
     auth_request_query_params = {
         "response_type": "code",
         "client_id": app_config.client_id,
@@ -96,8 +103,7 @@ def exercise_authorization(
     authorization: Union[AuthorizationCode, RefreshToken],
     redirect_url: AnyHttpUrl,
 ) -> TokenData:
-    """Exercises either a auth code (to complete login) or a refresh token."""
-
+    """Exercises either an auth code (to complete login) or a refresh token."""
     logger.debug(f"exercising authorization with grant type: {type}")
     if type is AuthorizationType.CODE:
         authorization_param = "code"
@@ -128,6 +134,7 @@ def exercise_authorization(
 
 
 def handle_api_response(response: Response) -> Response:
+    """Handle response from OpenAPI."""
     s = response.status_code
     if "/sim" in response.request.path_url:
         env = "SIM"
@@ -175,19 +182,19 @@ def handle_api_response(response: Response) -> Response:
 
 
 def decode_streaming_message(message: bytes) -> StreamingMessage:
-    """Convert streaming message to dict."""
+    """Decode streaming message byte and convert to dict."""
     logger.debug(f"received streaming message: {str(message)}")
     message_id = int.from_bytes(message[0:8], byteorder="little")
     ref_id_len = int(message[10])
-    ref_id = message[11 : 11 + ref_id_len].decode()
+    ref_id = message[11 : 11 + ref_id_len].decode()  # noqa
     format = int(message[11 + ref_id_len])
     if format != 0:
         raise RuntimeError(
-            "unsupported payload format received on streaming connection: {format}"
+            f"unsupported payload format received on streaming connection: {format}"
         )
     payload_size = int.from_bytes(
-        message[12 + ref_id_len : 16 + ref_id_len], byteorder="little"
+        message[12 + ref_id_len : 16 + ref_id_len], byteorder="little"  # noqa
     )
-    payload = message[16 + ref_id_len : 16 + ref_id_len + payload_size].decode()
+    payload = message[16 + ref_id_len : 16 + ref_id_len + payload_size].decode()  # noqa
 
     return StreamingMessage(msg_id=message_id, ref_id=ref_id, data=json.loads(payload))

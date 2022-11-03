@@ -1,3 +1,5 @@
+"""Redirect server class used by SaxoOpenAPIClient."""
+
 import logging
 import threading
 from urllib.parse import parse_qs
@@ -8,9 +10,16 @@ from pydantic import AnyHttpUrl, parse_obj_as
 from werkzeug.serving import make_server
 
 response_html = """
+<head>
+<title>
+Redirect Server
+</title>
+</head>
+<body>
 <center><h2 style='font-family: sans-serif;'>
 {display_text}
 </h2></center>
+</body>
 """
 
 
@@ -18,6 +27,7 @@ class RedirectServer(threading.Thread):
     """Simple redirect server to catch callback from Saxo SSO."""
 
     def __init__(self, redirect_url: AnyHttpUrl, state: str):
+        """Create new redirect server."""
         app = Flask(__name__)
         self.auth_code = None
 
@@ -64,9 +74,11 @@ class RedirectServer(threading.Thread):
         ).disabled = True  # disable default server logging to stdout
 
     def run(self) -> None:
+        """Start server."""
         logger.debug("starting redirect server")
         self.server.serve_forever()
 
     def shutdown(self) -> None:
+        """Stop server."""
         logger.debug("terminating redirect server")
         self.server.shutdown()
