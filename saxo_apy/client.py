@@ -32,6 +32,7 @@ from .models import (
 )
 from .redirect_server import RedirectServer
 from .utils import (
+    configure_logger,
     construct_auth_url,
     exercise_authorization,
     handle_api_response,
@@ -66,15 +67,7 @@ class SaxoOpenAPIClient:
         provided.
         """
         if log_sink:
-            logger.add(
-                log_sink,
-                format=(
-                    "{time:YYYY-MM-DD HH:mm:ss.SSS!UTC}Z {thread:12} {level:8} "
-                    "{module:15} {line:3} {function:25} {message}"
-                ),
-                level=log_level,
-                enqueue=True,
-            )
+            configure_logger(log_sink, log_level)
 
         self.client_session_id: str = token_urlsafe(10)
         logger.debug(
@@ -191,6 +184,22 @@ class SaxoOpenAPIClient:
             self.start_auto_refresh_thread()
 
         logger.success("login completed successfully")
+
+    def logout(self) -> None:
+        """Disconnect by resetting session and deleting tokens and refresh thread."""
+        assert self.logged_in
+        logger.debug("disconnecting from OpenAPI")
+        self._http_session = Session()
+        self._http_session.headers = make_default_session_headers()
+        self._token_data = None
+        self.streaming_context_id = None
+        self.streaming_connection = None
+        refresh_thread = [
+            thread for thread in threading.enumerate() if thread.name == "RefreshThread"
+        ]
+        if len(refresh_thread) > 0 and refresh_thread[0].is_alive():
+            refresh_thread[0].cancel()  # type: ignore[attr-defined]
+        logger.success("logout completed")
 
     def refresh(self) -> None:
         """Exercise refresh token and re-authorize streaming connection (if available).
@@ -372,6 +381,8 @@ class SaxoOpenAPIClient:
             f"response received with status: {response.status_code}, X-Correlation: "
             f"{response.headers.get('X-Correlation')}"
         )
+        logger.debug(f"response headers: {response.headers}")
+        logger.debug(f"response body: {response.text}")
 
         return response
 
@@ -395,19 +406,15 @@ class SaxoOpenAPIClient:
         """Check if the client is connected with a valid session to OpenAPI.
 
         If no token data is available, the client is not logged in (yet).
-        If the refresh token has expired, the client is effectively disconnected.
-        A valid refresh token will always allow the client to exercise for a new
-        access token and hence keep the session alive.
+        If the access token has expired, the client is effectively disconnected.
         """
-        try:
-            assert self._token_data
-        except AssertionError:
+        if not self._token_data:
             raise NotLoggedInError(
                 "no active session found - connect the client with '.login()'"
             )
-        if time() > self._token_data.refresh_token_expiry:
+        if time() > self._token_data.access_token_expiry:
             raise TokenExpiredError(
-                "refresh token has expired - reconnect the client with '.login()'"
+                "access token has expired - reconnect the client with '.login()'"
             )
         return True
 

@@ -23,6 +23,18 @@ from .models import (
 )
 
 
+def configure_logger(log_sink: str, log_level: str) -> None:
+    logger.add(
+        log_sink,
+        format=(
+            "{time:YYYY-MM-DD HH:mm:ss.SSS!UTC}Z {thread:12} {level:8} "
+            "{module:15} {line:3} {function:25} {message}"
+        ),
+        level=log_level,
+        enqueue=True,
+    )
+
+
 def make_default_session_headers() -> CaseInsensitiveDict:
     headers: Dict[str, str] = make_headers(
         keep_alive=True,
