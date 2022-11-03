@@ -6,6 +6,7 @@ with Saxo Bank OpenAPI.
 """
 
 import asyncio
+import json
 import threading
 import webbrowser
 from datetime import datetime
@@ -41,7 +42,7 @@ from .utils import (
     validate_redirect_url,
 )
 
-logger.remove()
+logger.remove()  # remove default console logger
 
 
 class SaxoOpenAPIClient:
@@ -54,13 +55,15 @@ class SaxoOpenAPIClient:
 
     def __init__(
         self,
-        app_config: dict,
+        app_config: Union[dict, str, None] = "app_config.json",
         log_sink: str = None,
         log_level: str = "DEBUG",
     ):
         """Create a new instance of SaxoOpenAPIClient.
 
-        `app_config` should be a dictionary containing app config from Developer Portal.
+        `app_config` should be a dictionary containing app config from Developer Portal
+        or a path to a config file (defaults to `app_config.json` in local directory).
+
 
         Set `log_sink` and `log_level` to adjust logging output (useful if errors are
         encountered). Default: no logs are written, log level is `DEBUG` if sink is
@@ -74,7 +77,18 @@ class SaxoOpenAPIClient:
             f"initializing OpenAPI Client with session id: {self.client_session_id}"
         )
 
-        self._app_config: OpenAPIAppConfig = parse_obj_as(OpenAPIAppConfig, app_config)
+        self._app_config: OpenAPIAppConfig
+
+        if isinstance(app_config, dict):
+            self._app_config = parse_obj_as(OpenAPIAppConfig, app_config)
+        elif isinstance(app_config, str):
+            with open(app_config, "r") as f:
+                config = json.load(f)
+            self._app_config = parse_obj_as(OpenAPIAppConfig, config)
+        else:
+            raise RuntimeError(
+                f"invalid type provided for 'app_config': {type(app_config)}"
+            )
         self._http_session: Session = Session()
         self._http_session.headers = make_default_session_headers()
         self._token_data: Union[TokenData, None] = None
