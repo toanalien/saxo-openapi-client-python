@@ -6,11 +6,10 @@ from http import HTTPStatus
 from typing import Dict, Optional, Union
 from urllib.parse import urlencode
 
-import requests
+import httpx
+from httpx import Response
 from loguru import logger
 from pydantic import AnyHttpUrl, parse_obj_as
-from requests import Response
-from requests.structures import CaseInsensitiveDict
 from urllib3 import make_headers
 
 from .models import (
@@ -38,7 +37,7 @@ def configure_logger(log_sink: str, log_level: str) -> None:
     )
 
 
-def make_default_session_headers() -> CaseInsensitiveDict:
+def make_default_session_headers() -> Dict:
     """Set default HTTP session."""
     headers: Dict[str, str] = make_headers(
         keep_alive=True,
@@ -51,7 +50,7 @@ def make_default_session_headers() -> CaseInsensitiveDict:
             "accept": "application/json; charset=utf-8",
         }
     )
-    return CaseInsensitiveDict(headers)
+    return dict(headers)
 
 
 def unix_seconds_to_datetime(timestamp: int) -> datetime:
@@ -118,7 +117,7 @@ def exercise_authorization(
         "client_secret": app_config.client_secret,
     }
 
-    response = requests.post(app_config.token_endpoint, params=token_request_params)
+    response = httpx.post(app_config.token_endpoint, params=token_request_params)
 
     if response.status_code != 201:
         raise RuntimeError(
@@ -136,7 +135,7 @@ def exercise_authorization(
 def handle_api_response(response: Response) -> Response:
     """Handle response from OpenAPI."""
     s = response.status_code
-    if "/sim" in response.request.path_url:
+    if "/sim" in str(response.request.url):
         env = "SIM"
     else:
         env = "LIVE"
@@ -152,11 +151,11 @@ def handle_api_response(response: Response) -> Response:
             "logged in with write permissions and/or market data has been enabled"
         )
     elif s == HTTPStatus.NOT_FOUND:
-        error_msg = f"requested resource not found: {response.request.path_url}"
+        error_msg = f"requested resource not found: {response.request.url}"
     elif s == HTTPStatus.METHOD_NOT_ALLOWED:
         error_msg = (
             f"the requested method ({response.request.method}) is not valid for this "
-            f"endpoint: {response.request.path_url}"
+            f"endpoint: {response.request.url}"
         )
     elif s in range(500, 505):
         error_msg = (

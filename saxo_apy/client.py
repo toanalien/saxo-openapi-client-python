@@ -15,9 +15,9 @@ from time import sleep, time
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
+from httpx import Client, Response
 from loguru import logger
 from pydantic import AnyHttpUrl, ValidationError, parse_obj_as
-from requests import Response, Session
 from websockets import client as ws_client
 
 from .models import (
@@ -64,7 +64,6 @@ class SaxoOpenAPIClient:
         `app_config` should be a dictionary containing app config from Developer Portal
         or a path to a config file (defaults to `app_config.json` in local directory).
 
-
         Set `log_sink` and `log_level` to adjust logging output (useful if errors are
         encountered). Default: no logs are written, log level is `DEBUG` if sink is
         provided.
@@ -89,8 +88,10 @@ class SaxoOpenAPIClient:
             raise RuntimeError(
                 f"invalid type provided for 'app_config': {type(app_config)}"
             )
-        self._http_session: Session = Session()
-        self._http_session.headers = make_default_session_headers()
+        self._http_client: Client = Client(
+            headers=make_default_session_headers(),
+            base_url=self._app_config.api_base_url,
+        )
         self._token_data: Union[TokenData, None] = None
         self.streaming_context_id: Union[str, None] = None
         self.streaming_connection: Any = None
@@ -170,17 +171,17 @@ class SaxoOpenAPIClient:
             redirect_url=_redirect_url,
         )
 
-        self._http_session.headers.update(
+        # set access token on http client session
+        self._http_client.headers.update(
             {"authorization": f"Bearer {token_data.access_token}"}
         )
         self._token_data = token_data
 
-        assert self._app_config.env
-        env_msg = self._app_config.env.value
+        env = self._app_config.env.value  # type: ignore[union-attr]
         perm = "WRITE / TRADE" if self._token_data.write_permission else "READ"
 
         print(
-            f"✅ authorization succeeded - connected to {env_msg} environment with "
+            f"✅ authorization succeeded - connected to {env} environment with "
             f"{perm} permissions (session ID {self._token_data.session_id})"
         )
 
@@ -195,7 +196,7 @@ class SaxoOpenAPIClient:
             )
 
         if start_refresh_thread:
-            self.start_auto_refresh_thread()
+            self.start_refresh_service()
 
         logger.success("login completed successfully")
 
@@ -203,8 +204,10 @@ class SaxoOpenAPIClient:
         """Disconnect by resetting session and deleting tokens and refresh thread."""
         assert self.logged_in
         logger.debug("disconnecting from OpenAPI")
-        self._http_session = Session()
-        self._http_session.headers = make_default_session_headers()
+        self._http_client = Client(
+            headers=make_default_session_headers(),
+            base_url=self._app_config.api_base_url,
+        )
         self._token_data = None
         self.streaming_context_id = None
         self.streaming_connection = None
@@ -230,7 +233,9 @@ class SaxoOpenAPIClient:
             type=AuthorizationType.REFRESH_TOKEN,
             redirect_url=self._token_data.redirect_url,  # type: ignore[union-attr]
         )
-        self._http_session.headers.update(
+
+        # set refreshed access token on http client session
+        self._http_client.headers.update(
             {"authorization": f"Bearer {refreshed_token_data.access_token}"}
         )
         self._token_data = refreshed_token_data
@@ -253,14 +258,14 @@ class SaxoOpenAPIClient:
         while self.logged_in:
             delay = self.time_to_expiry - 30
             logger.debug(
-                f"async refresh will kick off refresh loop in {delay} seconds at: "
+                f"async refresh will kick off refresh flow in {delay} seconds at: "
                 f"{unix_seconds_to_datetime(int(time()) + delay)}"
             )
             await asyncio.sleep(delay)
             logger.debug("async refresh delay has passed - kicking off refresh")
             self.refresh()
 
-    def start_auto_refresh_thread(self) -> None:
+    def start_refresh_service(self) -> None:
         """Launch a refresh thread that will keep the session authenticated.
 
         Useful to keep Jupyter Notebooks authenticated.
@@ -281,7 +286,7 @@ class SaxoOpenAPIClient:
                 logger.debug("time to expiry less than 1 minute - kicking off refresh")
                 self.refresh()
 
-            # time to expiry is not updated with new value for refreshed token
+            # time_to_expiry is now updated with new value for refreshed token
             _delay_time = self.time_to_expiry - 30
 
             logger.debug(
@@ -382,21 +387,18 @@ class SaxoOpenAPIClient:
             f"{params=}, {data=}, {headers=}"
         )
 
-        with self._http_session as session:
-            response = session.request(
-                method,
-                f"{self.api_base_url}{path}",
-                params=params,
-                json=data,
-                headers=headers,
-            )
+        response = self._http_client.request(
+            method,
+            path,
+            params=params,
+            json=data,
+            headers=headers,
+        )
 
         logger.debug(
             f"response received with status: {response.status_code}, X-Correlation: "
             f"{response.headers.get('X-Correlation')}"
         )
-        logger.debug(f"response headers: {response.headers}")
-        logger.debug(f"response body: {response.text}")
 
         return response
 

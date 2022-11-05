@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
-import requests
+import httpx
 from pydantic import AnyHttpUrl, parse_obj_as
 from pytest import MonkeyPatch, mark, raises
-from requests.structures import CaseInsensitiveDict
+
 from saxo_apy.models import (
     AuthorizationCode,
     AuthorizationType,
@@ -24,7 +24,6 @@ from .fixtures.models import DUMMY_LIVE_CONFIG, DUMMY_SIM_CONFIG, MockAuthRespon
 
 def test_make_default_session_headers() -> None:
     headers = make_default_session_headers()
-    assert isinstance(headers, CaseInsensitiveDict)
 
     expected_headers = {
         "accept-encoding": "gzip",
@@ -101,7 +100,7 @@ def test_exercise_authorization(
     def mock_auth(url: str, params: dict) -> MockAuthResponse:
         return MockAuthResponse()
 
-    monkeypatch.setattr(requests, "post", mock_auth)
+    monkeypatch.setattr(httpx, "post", mock_auth)
 
     token_data = exercise_authorization(
         config, auth_type, auth_token, redirect_url=config.redirect_urls[0]
