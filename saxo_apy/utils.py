@@ -7,7 +7,6 @@ from typing import Dict, Optional, Union
 from urllib.parse import urlencode
 
 import httpx
-from httpx import Response
 from loguru import logger
 from pydantic import AnyHttpUrl, parse_obj_as
 from urllib3 import make_headers
@@ -132,7 +131,7 @@ def exercise_authorization(
     return TokenData.parse_obj(received_token_data)
 
 
-def handle_api_response(response: Response) -> Response:
+def handle_api_response(response: httpx.Response) -> httpx.Response:
     """Handle response from OpenAPI."""
     s = response.status_code
     if "/sim" in str(response.request.url):
