@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 import httpx
 from loguru import logger
 from pydantic import AnyHttpUrl, parse_obj_as
-from urllib3 import make_headers
 
 from .models import (
     APIResponseError,
@@ -38,18 +37,14 @@ def configure_logger(log_sink: str, log_level: str) -> None:
 
 def make_default_session_headers() -> Dict:
     """Set default HTTP session."""
-    headers: Dict[str, str] = make_headers(
-        keep_alive=True,
-        accept_encoding="gzip",
-        user_agent="saxo-apy/0.1.13",
-        disable_cache=True,
-    )
-    headers.update(
-        {
-            "accept": "application/json; charset=utf-8",
-        }
-    )
-    return dict(headers)
+    headers: Dict[str, str] = {
+        "accept": "application/json; charset=utf-8",
+        "accept-encoding": "gzip",
+        "user-agent": "saxo-apy/0.1.14",
+        "connection": "keep-alive",
+        "cache-control": "no-cache",
+    }
+    return headers
 
 
 def unix_seconds_to_datetime(timestamp: int) -> datetime:
