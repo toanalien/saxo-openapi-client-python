@@ -19,7 +19,7 @@ dependencies = [
   "Flask==2.2.2",
   "pydantic==1.10.2",
   "httpx==0.23.0",
-  "PyJWT==2.5.0",
+  "websockets==10.4",
   "loguru==0.6.0"
 ]
 
