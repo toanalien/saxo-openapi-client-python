@@ -102,7 +102,7 @@ class SaxoOpenAPIClient:
         redirect_url: Optional[AnyHttpUrl] = None,
         launch_browser: bool = True,
         catch_redirect: bool = True,
-        start_refresh_thread: bool = False,
+        start_async_refresh: bool = False,
     ) -> None:
         """Log in to Saxo OpenAPI using the provided config provided in __init__().
 
@@ -111,12 +111,12 @@ class SaxoOpenAPIClient:
         - Use `launch_browser` to automatically show login page.
         - Use `catch_redirect` to start a server that will listen for the post-login
         redirect from Saxo SSO.
-        - Use `start_refresh_thread` to directly start a Timer thread post-login that
-        will keep the session authenticated (for use in Jupyter Notebooks).
+        - Use `start_async_refresh` to ensure the session is automatically refreshed (to
+        be used in Jupyter Notebooks).
         """
         logger.debug(
             f"initializing login sequence with {redirect_url=}, {launch_browser=} "
-            f"{catch_redirect=} {start_refresh_thread=}"
+            f"{catch_redirect=} {start_async_refresh=}"
         )
         _redirect_url = validate_redirect_url(self._app_config, redirect_url)
         state = token_urlsafe(20)
@@ -194,8 +194,8 @@ class SaxoOpenAPIClient:
                 "client can create and change orders on your Saxo account!"
             )
 
-        if start_refresh_thread:
-            self.start_refresh_service()
+        if start_async_refresh:
+            asyncio.create_task(self.async_refresh(), name="async_refresh")
 
         logger.success("login completed successfully")
 
@@ -262,42 +262,6 @@ class SaxoOpenAPIClient:
             await asyncio.sleep(delay)
             logger.debug("async refresh delay has passed - kicking off refresh")
             self.refresh()
-
-    def start_refresh_service(self) -> None:
-        """Launch a refresh thread that will keep the session authenticated.
-
-        Useful to keep Jupyter Notebooks authenticated.
-        """
-        existing_thread = [
-            thread for thread in threading.enumerate() if thread.name == "RefreshThread"
-        ]
-        if len(existing_thread) > 0 and existing_thread[0].is_alive():
-            raise RuntimeError("refresh thread already running")
-
-        def refresh_service() -> None:
-            logger.debug(
-                f"access token valid until: {self.access_token_expiry}, "
-                f"which is {self.time_to_expiry} seconds from now"
-            )
-
-            if self.time_to_expiry < 60:
-                logger.debug("time to expiry less than 1 minute - kicking off refresh")
-                self.refresh()
-
-            # time_to_expiry is now updated with new value for refreshed token
-            _delay_time = self.time_to_expiry - 30
-
-            logger.debug(
-                f"setting delay of {_delay_time} seconds for next refresh at: "
-                f"{unix_seconds_to_datetime(int(time())+_delay_time)}"
-            )
-
-            refresh_thread = threading.Timer(_delay_time, refresh_service)
-            refresh_thread.name = "RefreshThread"
-            refresh_thread.start()
-            logger.success(f"refresh thread started with id: {refresh_thread.ident}")
-
-        refresh_service()
 
     def setup_streaming_connection(self) -> None:
         """Configure a streaming websocket connection.
