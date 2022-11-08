@@ -1,11 +1,12 @@
 """Data Models used by SaxoOpenAPIClient."""
 
+import json
+from base64 import urlsafe_b64decode
 from enum import Enum
 from re import compile
 from time import time
 from typing import Dict, List, Optional
 
-from jwt import decode
 from pydantic import (
     AnyHttpUrl,
     AnyUrl,
@@ -138,7 +139,6 @@ class TokenData(BaseModel):
     refresh_token: RefreshToken
     refresh_token_expires_in: int
     base_uri: Optional[HttpsUrl]
-    redirect_url: AnyHttpUrl
     access_token_expiry: int
     refresh_token_expiry: int
     client_key: str
@@ -149,21 +149,20 @@ class TokenData(BaseModel):
     @root_validator(pre=True)
     def set_fields_from_token_payload(cls, values: dict) -> dict:
         """Set fields from token claims."""
-        payload = decode(
-            values["access_token"],
-            options={
-                "verify_signature": False,  # signature not verified
-            },
-        )
+        token_bytes = values["access_token"].encode("utf-8")
+        payload = token_bytes.split(b".")[1]
+        padded = payload + b"=" * divmod(len(payload), 4)[1]
+        decoded = urlsafe_b64decode(padded)
+        claims = json.loads(decoded.decode("utf-8"))
 
-        values["access_token_expiry"] = payload["exp"]
+        values["access_token_expiry"] = claims["exp"]
         values["refresh_token_expiry"] = (
             int(time()) + values["refresh_token_expires_in"]
         )
-        values["client_key"] = payload["cid"]
-        values["user_key"] = payload["uid"]
-        values["session_id"] = payload["sid"]
-        values["write_permission"] = True if payload["oaa"] == "77770" else False
+        values["client_key"] = claims["cid"]
+        values["user_key"] = claims["uid"]
+        values["session_id"] = claims["sid"]
+        values["write_permission"] = True if claims["oaa"] == "77770" else False
 
         return values
 

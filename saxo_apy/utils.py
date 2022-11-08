@@ -99,7 +99,6 @@ def exercise_authorization(
     app_config: OpenAPIAppConfig,
     type: AuthorizationType,
     authorization: Union[AuthorizationCode, RefreshToken],
-    redirect_url: AnyHttpUrl,
 ) -> TokenData:
     """Exercises either an auth code (to complete login) or a refresh token."""
     logger.debug(f"exercising authorization with grant type: {type}")
@@ -111,7 +110,6 @@ def exercise_authorization(
     token_request_params = {
         "grant_type": type.value,
         authorization_param: authorization,
-        "redirect_uri": redirect_url,
         "client_id": app_config.client_id,
         "client_secret": app_config.client_secret,
     }
@@ -127,7 +125,6 @@ def exercise_authorization(
     logger.success("successfully exercised authorization - new token data retrieved")
 
     received_token_data = response.json()
-    received_token_data.update({"redirect_url": redirect_url})
     return TokenData.parse_obj(received_token_data)
 
 

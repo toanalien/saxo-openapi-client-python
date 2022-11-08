@@ -168,7 +168,6 @@ class SaxoOpenAPIClient:
             app_config=self._app_config,
             authorization=parse_obj_as(AuthorizationCode, _auth_code),
             type=AuthorizationType.CODE,
-            redirect_url=_redirect_url,
         )
 
         # set access token on http client session
@@ -231,7 +230,6 @@ class SaxoOpenAPIClient:
             app_config=self._app_config,
             authorization=self._token_data.refresh_token,  # type: ignore[union-attr]
             type=AuthorizationType.REFRESH_TOKEN,
-            redirect_url=self._token_data.redirect_url,  # type: ignore[union-attr]
         )
 
         # set refreshed access token on http client session
