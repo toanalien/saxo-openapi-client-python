@@ -1,6 +1,6 @@
 [project]
 name = "saxo-apy"
-version = "0.1.10"
+version = "0.1.11"
 authors = [
   {name="Gid van der Ven", email="giddevanderven@gmail.com"}
 ]

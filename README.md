@@ -14,9 +14,12 @@
     - Works seamlessly in both `SIM` and `LIVE` environments (with read and write/trade permissions)
     - Automated handling of callback (optional)
     - Headless authentication for deployed applications (optional)
-    - Ad-hoc refresh of OAuth tokens when sending requests
+    - Keep session active by refreshing access tokens:
+        - Via a separate thread (useful for Jupyter Notebooks)
+        - Via an async function that can be used while streaming
 - [x] Read operations (`GET` requests)
 - [x] Write operations (`POST`, `PUT`, `PATCH`, `DELETE`, requests)
+- [x] Supports streaming and decoding of streaming messages
 - [x] Error handling with practical exception messages
 
 
@@ -72,7 +75,7 @@ This package requires 4 dependencies:
 
 - `pydantic`, for parsing config and JSON responses 
 - `Flask`, to run a local server and catch the callback from Saxo SSO
-- `requests`, for sending requests to OpenAPI and managing the session
+- `httpx`, for sending requests to OpenAPI and managing the client session
 - `PyJWT`, for parsing and validating access tokens
 - `loguru`, to handle logging
 
