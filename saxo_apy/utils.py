@@ -41,7 +41,7 @@ def make_default_session_headers() -> Dict:
     headers: Dict[str, str] = make_headers(
         keep_alive=True,
         accept_encoding="gzip",
-        user_agent="saxo-apy/0.1.12",
+        user_agent="saxo-apy/0.1.13",
         disable_cache=True,
     )
     headers.update(
