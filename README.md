@@ -4,23 +4,21 @@
 
 [![python](https://img.shields.io/badge/python-3.7+-blue)](https://github.com/SaxoBank/saxo-openapi-client-python)
 
-> NOTE: This piece of software was created by an enthusiast as a learning project. None of the contents in this repository are maintained by Saxo Bank, and Saxo Bank does not guarantee correctness of the provided implementation.
+> NOTE: This Python package was created by an enthusiast as a learning project. None of the contents in this repository are maintained by Saxo Bank, and Saxo Bank does not guarantee correctness of the provided implementation.
 
 
 ## Features
 
-- [x] Authentication and session management with Saxo SSO OAuth 2.0
-    - Supports OAuth `Code` grant type
-    - Works seamlessly in both `SIM` and `LIVE` environments (with read and write/trade permissions)
-    - Automated handling of callback (optional)
+- [x] Authentication and session management with Saxo SSO
+    - Supports OAuth 2.0 `Code` grant type
+    - Works seamlessly in both `SIM` and `LIVE` environments
+    - Automated handling of callback from SSO (optional)
     - Headless authentication for deployed applications (optional)
-    - Keep session active by refreshing access tokens:
-        - Via a separate thread (useful for Jupyter Notebooks)
-        - Via an async function that can be used while streaming
+    - Keep sessions and active websockets alive by refreshing access tokens via asyncio
 - [x] Read operations (`GET` requests)
-- [x] Write operations (`POST`, `PUT`, `PATCH`, `DELETE`, requests)
+- [x] Write operations (`POST`, `PUT`, `PATCH`, `DELETE` requests)
 - [x] Supports streaming and decoding of streaming messages
-- [x] Error handling with practical exception messages
+- [x] Error handling with comprehensive exception messages
 
 
 ## Installation
@@ -64,6 +62,14 @@ config = {
 }
 
 client = SaxoOpenAPIClient(config)
+client.login()
+me = client.get("/port/v1/users/me")
+print(me)
+
+> {'ClientKey': 'U8SNV3JLdN4gzcQfmThXJA==',
+> 'Culture': 'en-US',
+> 'Language': 'en',
+> ...
 ```
 
 See [the samples](/samples/README.md) for loads more examples on how to use the client.
@@ -76,7 +82,7 @@ This package requires 4 dependencies:
 - `pydantic`, for parsing config and JSON responses 
 - `Flask`, to run a local server and catch the callback from Saxo SSO
 - `httpx`, for sending requests to OpenAPI and managing the client session
-- `PyJWT`, for parsing and validating access tokens
+- `websockets`, for setting up a websocket connection to Saxo's streaming service
 - `loguru`, to handle logging
 
 
