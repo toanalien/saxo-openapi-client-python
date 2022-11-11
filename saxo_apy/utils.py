@@ -3,23 +3,14 @@
 import json
 from datetime import datetime, timezone
 from http import HTTPStatus
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 from urllib.parse import urlencode
 
 import httpx
 from loguru import logger
 from pydantic import AnyHttpUrl, parse_obj_as
 
-from .models import (
-    APIResponseError,
-    AuthorizationCode,
-    AuthorizationType,
-    HttpsUrl,
-    OpenAPIAppConfig,
-    RefreshToken,
-    StreamingMessage,
-    TokenData,
-)
+from .models import APIResponseError, HttpsUrl, OpenAPIAppConfig, StreamingMessage
 
 
 def configure_logger(log_sink: str, log_level: str) -> None:
@@ -40,7 +31,7 @@ def make_default_session_headers() -> Dict:
     headers: Dict[str, str] = {
         "accept": "application/json; charset=utf-8",
         "accept-encoding": "gzip",
-        "user-agent": "saxo-apy/0.1.14",
+        "user-agent": "saxo-apy/0.1.15",
         "connection": "keep-alive",
         "cache-control": "no-cache",
     }
@@ -88,39 +79,6 @@ def construct_auth_url(
         HttpsUrl,
         app_config.auth_endpoint + "?" + urlencode(auth_request_query_params),
     )
-
-
-def exercise_authorization(
-    app_config: OpenAPIAppConfig,
-    type: AuthorizationType,
-    authorization: Union[AuthorizationCode, RefreshToken],
-) -> TokenData:
-    """Exercises either an auth code (to complete login) or a refresh token."""
-    logger.debug(f"exercising authorization with grant type: {type}")
-    if type is AuthorizationType.CODE:
-        authorization_param = "code"
-    elif type is AuthorizationType.REFRESH_TOKEN:
-        authorization_param = "refresh_token"
-
-    token_request_params = {
-        "grant_type": type.value,
-        authorization_param: authorization,
-        "client_id": app_config.client_id,
-        "client_secret": app_config.client_secret,
-    }
-
-    response = httpx.post(app_config.token_endpoint, params=token_request_params)
-
-    if response.status_code != 201:
-        raise RuntimeError(
-            "unexpected error occurred while retrieving token - response status: "
-            f"{response.status_code}"
-        )
-
-    logger.success("successfully exercised authorization - new token data retrieved")
-
-    received_token_data = response.json()
-    return TokenData.parse_obj(received_token_data)
 
 
 def handle_api_response(response: httpx.Response) -> httpx.Response:

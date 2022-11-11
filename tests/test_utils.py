@@ -1,25 +1,18 @@
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
-import httpx
 from pydantic import AnyHttpUrl, parse_obj_as
-from pytest import MonkeyPatch, mark, raises
+from pytest import mark, raises
 
-from saxo_apy.models import (
-    AuthorizationCode,
-    AuthorizationType,
-    OpenAPIAppConfig,
-    TokenData,
-)
+from saxo_apy.models import OpenAPIAppConfig
 from saxo_apy.utils import (
     construct_auth_url,
-    exercise_authorization,
     make_default_session_headers,
     unix_seconds_to_datetime,
     validate_redirect_url,
 )
 
-from .fixtures.models import DUMMY_LIVE_CONFIG, DUMMY_SIM_CONFIG, MockAuthResponse
+from .fixtures.models import DUMMY_LIVE_CONFIG, DUMMY_SIM_CONFIG
 
 
 def test_make_default_session_headers() -> None:
@@ -27,7 +20,7 @@ def test_make_default_session_headers() -> None:
 
     expected_headers = {
         "accept-encoding": "gzip",
-        "user-agent": "saxo-apy/0.1.10",
+        "user-agent": "saxo-apy/0.1.15",
         "connection": "keep-alive",
         "cache-control": "no-cache",
         "accept": "application/json; charset=utf-8",
@@ -82,35 +75,3 @@ def test_construct_auth_url(config: dict) -> None:
     assert querystring["client_id"][0] == _config.client_id
     assert querystring["state"][0] == "state123"
     assert querystring["redirect_uri"][0] == _config.redirect_urls[0]
-
-
-@mark.parametrize(
-    "auth_type",
-    [
-        (AuthorizationType.CODE),
-        (AuthorizationType.REFRESH_TOKEN),
-    ],
-)
-def test_exercise_authorization(
-    auth_type: AuthorizationType, monkeypatch: MonkeyPatch
-) -> None:
-    config = parse_obj_as(OpenAPIAppConfig, DUMMY_SIM_CONFIG)
-    auth_token = parse_obj_as(AuthorizationCode, "11111111-1111-1111-1111-111111111111")
-
-    def mock_auth(url: str, params: dict) -> MockAuthResponse:
-        return MockAuthResponse()
-
-    monkeypatch.setattr(httpx, "post", mock_auth)
-
-    token_data = exercise_authorization(
-        config, auth_type, auth_token, redirect_url=config.redirect_urls[0]
-    )
-
-    assert isinstance(token_data, TokenData)
-
-    monkeypatch.setattr(MockAuthResponse, "status_code", 401)
-
-    with raises(RuntimeError, match="unexpected error occurred while retrieving token"):
-        token_data = exercise_authorization(
-            config, auth_type, auth_token, redirect_url=config.redirect_urls[0]
-        )

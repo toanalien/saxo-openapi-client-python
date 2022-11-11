@@ -15,7 +15,7 @@ from time import sleep, time
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs
 
-from httpx import Client, Response
+from httpx import Client, Response, post
 from loguru import logger
 from pydantic import AnyHttpUrl, ValidationError, parse_obj_as
 from websockets import client as ws_client
@@ -24,7 +24,6 @@ from .models import (
     APIEnvironment,
     APIRequestError,
     AuthorizationCode,
-    AuthorizationType,
     HttpsUrl,
     NotLoggedInError,
     OpenAPIAppConfig,
@@ -35,7 +34,6 @@ from .redirect_server import RedirectServer
 from .utils import (
     configure_logger,
     construct_auth_url,
-    exercise_authorization,
     handle_api_response,
     make_default_session_headers,
     unix_seconds_to_datetime,
@@ -142,7 +140,7 @@ class SaxoOpenAPIClient:
                 while not redirect_server.auth_code:
                     sleep(0.1)
                 print("📞 received callback from Saxo SSO")
-                _auth_code = redirect_server.auth_code
+                _auth_code = parse_obj_as(AuthorizationCode, redirect_server.auth_code)
             except KeyboardInterrupt:
                 print("🛑 operation interrupted by user - shutting down")
                 return
@@ -157,24 +155,16 @@ class SaxoOpenAPIClient:
                         AnyHttpUrl, redirect_location_input
                     )
                     parsed_qs = parse_qs(redirect_location.query)
-                    _auth_code = parsed_qs["code"][0]
+                    _auth_code = parse_obj_as(AuthorizationCode, parsed_qs["code"][0])
                 except ValidationError as e:
                     print(f"❌ failed to parse provided url due to error(s): {e}")
                 except KeyboardInterrupt:
                     print("🛑 operation interrupted by user - shutting down")
                     return
 
-        token_data = exercise_authorization(
-            app_config=self._app_config,
-            authorization=parse_obj_as(AuthorizationCode, _auth_code),
-            type=AuthorizationType.CODE,
-        )
+        self.get_tokens(auth_code=_auth_code)
 
-        # set access token on http client session
-        self._http_client.headers.update(
-            {"authorization": f"Bearer {token_data.access_token}"}
-        )
-        self._token_data = token_data
+        assert self._token_data
 
         env = self._app_config.env.value  # type: ignore[union-attr]
         perm = "WRITE / TRADE" if self._token_data.write_permission else "READ"
@@ -226,17 +216,8 @@ class SaxoOpenAPIClient:
         logger.debug("refreshing API session")
         assert self.logged_in
 
-        refreshed_token_data = exercise_authorization(
-            app_config=self._app_config,
-            authorization=self._token_data.refresh_token,  # type: ignore[union-attr]
-            type=AuthorizationType.REFRESH_TOKEN,
-        )
-
-        # set refreshed access token on http client session
-        self._http_client.headers.update(
-            {"authorization": f"Bearer {refreshed_token_data.access_token}"}
-        )
-        self._token_data = refreshed_token_data
+        self.get_tokens()
+        assert self._token_data
 
         if self.streaming_connection:
             logger.debug(
@@ -245,8 +226,8 @@ class SaxoOpenAPIClient:
             )
             self.put(
                 "/streamingws/authorize",
-                data=None,
                 params={"ContextId": self.streaming_context_id},
+                data=None,
             )
 
         logger.debug("successfully refreshed API session")
@@ -262,6 +243,40 @@ class SaxoOpenAPIClient:
             await asyncio.sleep(delay)
             logger.debug("async refresh delay has passed - kicking off refresh")
             self.refresh()
+        logger.debug("async refresh stopped as the client is no longer logged in")
+
+    def get_tokens(self, auth_code: AuthorizationCode = None) -> None:
+        """Retrieve a new token pair by exercising a refresh token or auth code."""
+        authorization_param = "code" if auth_code else "refresh_token"
+        grant_type = "authorization_code" if auth_code else "refresh_token"
+        logger.debug(f"exercising authorization with grant type: {grant_type}")
+
+        token_request_params = {
+            "grant_type": grant_type,
+            authorization_param: auth_code
+            or self._token_data.refresh_token,  # type: ignore[union-attr]
+            "client_id": self._app_config.client_id,
+            "client_secret": self._app_config.client_secret,
+        }
+        response = post(
+            self._app_config.token_endpoint,
+            params=token_request_params,
+            headers={
+                "user-agent": "saxo-apy/0.1.15",
+            },
+        )
+
+        if response.status_code != 201:
+            raise RuntimeError(
+                "unexpected error occurred while retrieving token - response status: "
+                f"{response.status_code}"
+            )
+        logger.success(
+            "successfully exercised authorization - new token data retrieved"
+        )
+
+        received_token_data = response.json()
+        self._token_data = TokenData.parse_obj(received_token_data)
 
     def setup_streaming_connection(self) -> None:
         """Configure a streaming websocket connection.
@@ -333,6 +348,7 @@ class SaxoOpenAPIClient:
     ) -> Response:
         """Send a request to OpenAPI without additional handling of the response."""
         assert self.logged_in
+        assert self._token_data
 
         if not path.startswith("/"):
             raise APIRequestError(
@@ -342,11 +358,12 @@ class SaxoOpenAPIClient:
 
         headers = {
             "x-request-id": (f"saxo-apy/{self.client_session_id}/{token_urlsafe(20)}"),
+            "authorization": f"Bearer {self._token_data.access_token}",
         }
 
         logger.debug(
             f"performing request: {method} {self.api_base_url}{path}, "
-            f"{params=}, {data=}, {headers=}"
+            f"{params=}, {data=}"
         )
 
         response = self._http_client.request(
