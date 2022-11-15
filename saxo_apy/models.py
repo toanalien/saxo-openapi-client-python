@@ -5,7 +5,7 @@ from base64 import urlsafe_b64decode
 from enum import Enum
 from re import compile
 from time import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from pydantic import (
     AnyHttpUrl,
@@ -172,7 +172,7 @@ class StreamingMessage(BaseModel):
 
     msg_id: int
     ref_id: str
-    data: List[Dict]
+    data: Union[Dict, List]
 
 
 class NotLoggedInError(Exception):
