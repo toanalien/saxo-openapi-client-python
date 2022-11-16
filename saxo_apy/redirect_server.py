@@ -53,7 +53,7 @@ class RedirectServer(threading.Thread):
                 display_text = "✅ Login succeeded! Please return to the application."
             else:
                 logger.error(
-                    "no auth code found in redirect - authentication error occurred "
+                    "no auth code found in redirect - authentication error occurred"
                     f"{request.url=}"
                 )
                 display_text = f"🚫 It looks like an error occurred - {request.url=}"
