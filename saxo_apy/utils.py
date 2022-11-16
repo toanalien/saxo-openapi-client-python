@@ -31,7 +31,7 @@ def make_default_session_headers() -> Dict:
     headers: Dict[str, str] = {
         "accept": "application/json; charset=utf-8",
         "accept-encoding": "gzip",
-        "user-agent": "saxo-apy/0.1.15",
+        "user-agent": "saxo-apy/0.1.16",
         "connection": "keep-alive",
         "cache-control": "no-cache",
     }
