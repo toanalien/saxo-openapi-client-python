@@ -1,7 +1,7 @@
 """Data Models used by SaxoOpenAPIClient."""
-
 import json
 from base64 import urlsafe_b64decode
+from datetime import datetime
 from enum import Enum
 from re import compile
 from time import time
@@ -16,6 +16,7 @@ from pydantic import (
     Extra,
     Field,
     root_validator,
+    validator,
 )
 
 SIM_STREAMING_URL = "wss://streaming.saxobank.com/sim/openapi/streamingws"
@@ -173,6 +174,12 @@ class StreamingMessage(BaseModel):
     msg_id: int
     ref_id: str
     data: Union[Dict, List]
+    ts: Optional[datetime] = None
+
+    @validator("ts", pre=True, always=True)
+    def set_ts_now(cls, v: datetime) -> datetime:
+        """Set datetime automatically for each message."""
+        return datetime.utcnow()
 
 
 class NotLoggedInError(Exception):
