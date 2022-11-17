@@ -1,6 +1,7 @@
-"""Simple streaming websocket example for EURUSD price data."""
+"""Simple streaming websocket example printing EURUSD prices to the terminal."""
 
 import asyncio
+from pprint import pprint
 
 from saxo_apy import SaxoOpenAPIClient
 from saxo_apy.utils import decode_streaming_message
@@ -24,7 +25,7 @@ async def create_subscription() -> None:
             "RefreshRate": 500,
         },
     )
-    print(sub)
+    pprint(sub)
 
 
 async def message_handler() -> None:
